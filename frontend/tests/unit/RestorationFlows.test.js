@@ -63,8 +63,8 @@ describe('restored journeys', () => {
     const detail = context(Detail, { targetId: 5, targetType: 'recording', form: { body: '乡音' }, $refs: { commentForm: { validate: async () => true } } });
     createComment.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ id: 1 });
     listComments.mockResolvedValue({ results: [], next: null });
-    await detail.send(); expect(detail.form.body).toBe('乡音');
-    await detail.send();
+    await detail.sendTopLevel(); expect(detail.form.body).toBe('乡音');
+    await detail.sendTopLevel();
     expect(createComment.mock.calls[0][0].client_id).toBe(createComment.mock.calls[1][0].client_id);
     expect(detail.form.body).toBe('');
   });
@@ -117,7 +117,7 @@ describe('entry discussion payload', () => {
     const detail = context(Detail, { targetId: 9, targetType: 'entry', form: { body: '另一种用法' }, $refs: { commentForm: { validate: async () => true } } });
     createComment.mockResolvedValue({ id: 1 });
     listComments.mockResolvedValue({ results: [], next: null });
-    await detail.send();
+    await detail.sendTopLevel();
     expect(createComment).toHaveBeenCalledWith(expect.objectContaining({ entry_id: 9 }), 'entry');
     expect(createComment.mock.calls[0][0]).not.toHaveProperty('recording_id');
     expect(listComments).toHaveBeenCalledWith(9, 1, 'entry');
