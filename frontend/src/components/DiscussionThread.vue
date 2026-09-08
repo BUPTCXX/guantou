@@ -210,6 +210,13 @@
             />
           </view>
         </view>
+        <BaseButton
+          v-if="sheetNext"
+          variant="ghost"
+          text="加载更多回复"
+          :disabled="sheetLoading"
+          @click="loadSheetReplies(true)"
+        />
       </scroll-view>
       <BaseForm
         ref="replyForm"
@@ -295,6 +302,7 @@ export default {
     sheetNext: null,
     sheetLoading: false,
     sheetError: '',
+    sheetRequestId: 0,
   }),
   mounted() {
     this.loadComments();
@@ -334,14 +342,18 @@ export default {
       this.sheetReplies = [];
       this.sheetPage = 1;
       this.sheetNext = null;
+      this.sheetLoading = false;
+      this.sheetRequestId += 1;
       this.replyDraft.body = '';
       await this.loadSheetReplies();
     },
     closeReplies() {
+      this.sheetRequestId += 1;
       this.sheet = { visible: false, parent: null, replyTarget: null };
     },
     async loadSheetReplies(more = false) {
       if (this.sheetLoading || !this.sheet.parent) return;
+      const requestId = this.sheetRequestId;
       this.sheetLoading = true;
       this.sheetError = '';
       const page = more ? this.sheetPage + 1 : 1;
@@ -352,14 +364,18 @@ export default {
           this.targetType,
           this.sheet.parent.id,
         );
+        if (requestId !== this.sheetRequestId) return;
         const rows = pageResults(response);
         this.sheetReplies = page === 1 ? rows : [...this.sheetReplies, ...rows];
         this.sheetPage = page;
         this.sheetNext = response.next;
       } catch (error) {
+        if (requestId !== this.sheetRequestId) return;
         this.sheetError = '回复暂时无法读取';
       } finally {
-        this.sheetLoading = false;
+        if (requestId === this.sheetRequestId) {
+          this.sheetLoading = false;
+        }
       }
     },
     async sendTopLevel() {
