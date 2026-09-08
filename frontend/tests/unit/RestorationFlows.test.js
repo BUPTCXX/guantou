@@ -124,6 +124,63 @@ describe('entry discussion payload', () => {
   });
 });
 
+describe('discussion replies sheet', () => {
+  const makeReply = (n, parentId) => ({
+    id: n,
+    parent_id: parentId,
+    body: `回复${n}`,
+    author_name: 'A',
+    like_count: 0,
+    liked: false,
+    editable: false,
+    reply_to_id: null,
+    reply_to_author_name: '',
+  });
+
+  it('loads additional reply pages from the full replies sheet', async () => {
+    listComments.mockImplementation(async (id, page, type, parentId) => (
+      page === 1
+        ? { results: Array.from({ length: 15 }, (_, i) => makeReply(i + 1, parentId)), next: 'next-page' }
+        : { results: [makeReply(16, parentId)], next: null }
+    ));
+
+    const detail = context(Detail, { targetId: 5, targetType: 'recording' });
+    await detail.openReplies({ id: 1, author_name: '楼主', body: '顶层留言' });
+
+    expect(detail.sheetReplies).toHaveLength(15);
+    expect(detail.sheetNext).toBe('next-page');
+
+    await detail.loadSheetReplies(true);
+
+    expect(detail.sheetReplies).toHaveLength(16);
+    expect(detail.sheetNext).toBeNull();
+  });
+
+  it('ignores a stale replies response when switching discussion threads', async () => {
+    let resolveSlow;
+    listComments
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSlow = resolve; }))
+      .mockImplementationOnce(async (id, page, type, parentId) => ({
+        results: [makeReply(200, parentId)],
+        next: null,
+      }));
+
+    const detail = context(Detail, { targetId: 5, targetType: 'recording' });
+    const slow = detail.openReplies({ id: 1, author_name: 'A', body: 'A顶层' });
+    await Promise.resolve();
+    const fast = detail.openReplies({ id: 2, author_name: 'B', body: 'B顶层' });
+    await fast;
+
+    expect(detail.sheet.parent.id).toBe(2);
+
+    resolveSlow({ results: [makeReply(100, 1)], next: null });
+    await slow;
+
+    expect(detail.sheet.parent.id).toBe(2);
+    expect(detail.sheetReplies[0].parent_id).toBe(2);
+  });
+});
+
 it('clears displayed draft content when returning under another account', () => {
   const page = context(RecordingCreate, { draftReady: true, ownerScope: 'user:1', draftId: 'old', audio: { path: 'wxfile://old' }, form: { original_gloss: 'private' }, goRecordingDrafts: vi.fn() });
   draftOwner.mockReturnValueOnce('user:2');
