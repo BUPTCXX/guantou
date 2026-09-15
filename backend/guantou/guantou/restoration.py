@@ -498,6 +498,9 @@ class RecordingCommentViewSet(viewsets.GenericViewSet):
                     distinct=True,
                 )
             )
+            # annotate 引入 GROUP BY 后 Meta.ordering 不再生效，分页前必须显式排序，
+            # 否则 Paginator 会抛 UnorderedObjectListWarning，且并发新增回复时跨页重复/漏项。
+            .order_by("created_at", "id")
             .select_related(
                 "author",
                 "recording",

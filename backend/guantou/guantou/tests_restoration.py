@@ -1,5 +1,8 @@
 import uuid
+import warnings
+
 from django.contrib.auth.models import User
+from django.core.paginator import UnorderedObjectListWarning
 from django.test import TestCase
 from rest_framework.test import APIClient
 from inbox.models import Notification
@@ -264,6 +267,54 @@ class RestorationTests(TestCase):
             format="json",
         )
         self.assertEqual(bad.status_code, 400)
+
+    def test_reply_pagination_is_stable_across_pages(self):
+        data = {
+            "recording_id": self.recording.id,
+            "body": "顶层留言",
+            "client_id": str(uuid.uuid4()),
+        }
+        top = self.client.post("/recording-comments/", data, format="json")
+        self.assertEqual(top.status_code, 201, top.data)
+        top_id = top.data["id"]
+        created_ids = []
+        for index in range(18):
+            response = self.client.post(
+                "/recording-comments/",
+                {
+                    **data,
+                    "client_id": str(uuid.uuid4()),
+                    "parent_id": top_id,
+                    "body": f"回复{index}",
+                },
+                format="json",
+            )
+            self.assertEqual(response.status_code, 201, response.data)
+            created_ids.append(response.data["id"])
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            page1 = self.client.get(
+                "/recording-comments/",
+                {"recording_id": self.recording.id, "parent_id": top_id, "page": 1},
+            )
+            page2 = self.client.get(
+                "/recording-comments/",
+                {"recording_id": self.recording.id, "parent_id": top_id, "page": 2},
+            )
+
+        unordered = [
+            item
+            for item in caught
+            if issubclass(item.category, UnorderedObjectListWarning)
+        ]
+        self.assertEqual(unordered, [])
+
+        page1_ids = [item["id"] for item in page1.data["results"]]
+        page2_ids = [item["id"] for item in page2.data["results"]]
+        self.assertEqual(len(page1_ids), 15)
+        self.assertEqual(len(page2_ids), 3)
+        self.assertEqual(page1_ids + page2_ids, created_ids)
 
     def test_search_daily_following_and_hidden_entry_link(self):
         self.assertEqual(
