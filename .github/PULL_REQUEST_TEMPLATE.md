@@ -46,3 +46,11 @@
 ## Known risks and rollback
 
 <!-- 最可能出错的地方、影响范围与回退方式。 -->
+
+## Contribution
+
+- [ ] I confirm that I have the right to submit this contribution.
+- [ ] Any third-party material is clearly identified with its source and license.
+
+For first-time contributors, the CLA check will guide explicit acceptance of
+the current e-dialect ICLA. These checkboxes do not constitute a CLA signature.
