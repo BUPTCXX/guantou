@@ -24,9 +24,49 @@ tags:
     description: 整理授权、申请、待办和可追溯操作。
   - name: Platform
     description: 客户端能力与隐私最小化的产品事件。
+  - name: Messages
+    description: 站内通知与事件筛选。
 security:
   - bearerAuth: []
 paths:
+  /notifications:
+    get:
+      tags:
+        - Messages
+      operationId: listNotifications
+      summary: 浏览当前用户通知
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: unread
+          in: query
+          schema:
+            type: boolean
+        - name: verb
+          in: query
+          description: 英文逗号分隔的完整事件 verb；按任一命中筛选，不能为空。
+          schema:
+            type: string
+          example: entry.reply,recording.reply
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPage"
+        "400":
+          description: 筛选参数无效
+        "401":
+          description: 未登录
   /collections/:
     get:
       tags:
@@ -499,6 +539,12 @@ paths:
           schema:
             type: integer
             minimum: 1
+        - name: parent_id
+          in: query
+          description: 一级评论 ID；提供时分页返回该讨论串的回复。
+          schema:
+            type: integer
+            minimum: 1
     post:
       tags:
         - Recordings
@@ -624,6 +670,12 @@ paths:
           required: true
         - name: page
           in: query
+          schema:
+            type: integer
+            minimum: 1
+        - name: parent_id
+          in: query
+          description: 一级评论 ID；提供时分页返回该讨论串的回复。
           schema:
             type: integer
             minimum: 1
@@ -1235,6 +1287,19 @@ components:
         parent_id:
           type: integer
           nullable: true
+        reply_to_id:
+          type: integer
+          nullable: true
+        reply_to_author_name:
+          type: string
+        reply_count:
+          type: integer
+          minimum: 0
+        recent_replies:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/RecordingComment"
         body:
           type: string
         author_id:
@@ -1260,6 +1325,9 @@ components:
         parent_id:
           type: integer
           nullable: true
+        reply_to_id:
+          type: integer
+          nullable: true
         body:
           type: string
           minLength: 1
@@ -1283,6 +1351,19 @@ components:
         parent_id:
           type: integer
           nullable: true
+        reply_to_id:
+          type: integer
+          nullable: true
+        reply_to_author_name:
+          type: string
+        reply_count:
+          type: integer
+          minimum: 0
+        recent_replies:
+          type: array
+          maxItems: 3
+          items:
+            $ref: "#/components/schemas/EntryComment"
         body:
           type: string
         author_id:
@@ -1308,6 +1389,9 @@ components:
         parent_id:
           type: integer
           nullable: true
+        reply_to_id:
+          type: integer
+          nullable: true
         body:
           type: string
           minLength: 1
@@ -1319,6 +1403,53 @@ components:
         - entry_id
         - body
         - client_id
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        from:
+          type: object
+          additionalProperties: true
+        to:
+          type: object
+          additionalProperties: true
+        time:
+          type: string
+        title:
+          type: string
+        verb:
+          type: string
+        unread:
+          type: boolean
+        content:
+          type: string
+        public:
+          type: boolean
+        target:
+          type: object
+          properties:
+            type:
+              type: string
+            id:
+              type: integer
+              nullable: true
+            url:
+              type: string
+    NotificationPage:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Notification"
+        total:
+          type: integer
+          minimum: 0
+        pages:
+          type: integer
+          minimum: 0
     LikeResult:
       type: object
       properties:

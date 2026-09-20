@@ -214,6 +214,46 @@ class RestorationTests(TestCase):
         self.assertEqual(len(replies), 4)
         self.assertEqual([item["parent_id"] for item in replies], [top_id] * 4)
 
+    def test_comment_listing_batches_recent_replies_authors_and_likes(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        def add_thread(index):
+            top = RecordingComment.objects.create(
+                recording=self.recording,
+                author=self.user,
+                body=f"顶层留言{index}",
+                client_id=uuid.uuid4(),
+            )
+            for reply_index in range(3):
+                RecordingComment.objects.create(
+                    recording=self.recording,
+                    author=self.other,
+                    parent=top,
+                    body=f"回复{index}-{reply_index}",
+                    client_id=uuid.uuid4(),
+                )
+
+        add_thread(0)
+        with CaptureQueriesContext(connection) as baseline:
+            first = self.client.get(
+                "/recording-comments/", {"recording_id": self.recording.id}
+            )
+        for index in range(1, 9):
+            add_thread(index)
+        with CaptureQueriesContext(connection) as expanded:
+            response = self.client.get(
+                "/recording-comments/", {"recording_id": self.recording.id}
+            )
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["results"]), 9)
+        self.assertTrue(
+            all(len(item["recent_replies"]) == 3 for item in response.data["results"])
+        )
+        self.assertLessEqual(len(expanded), len(baseline))
+
     def test_reply_to_reply_targets_the_specific_comment(self):
         data = {
             "recording_id": self.recording.id,

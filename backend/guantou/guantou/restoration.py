@@ -423,7 +423,10 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_recent_replies(self, obj):
         if obj.parent_id:
             return []
-        replies = obj.replies.filter(hidden=False).order_by("created_at", "id")[:3]
+        replies = getattr(obj, "visible_replies", None)
+        if replies is None:
+            replies = obj.replies.filter(hidden=False).order_by("created_at", "id")
+        replies = replies[:3]
         return CommentSerializer(replies, many=True, context=self.context).data
 
     def get_reply_to_author_name(self, obj):
@@ -508,7 +511,17 @@ class RecordingCommentViewSet(viewsets.GenericViewSet):
                 "parent__author",
                 "reply_to__author",
             )
-            .prefetch_related("likes")
+            .prefetch_related(
+                "likes",
+                Prefetch(
+                    "replies",
+                    queryset=RecordingComment.objects.filter(hidden=False)
+                    .order_by("created_at", "id")
+                    .select_related("author", "reply_to__author")
+                    .prefetch_related("likes")[:3],
+                    to_attr="visible_replies",
+                ),
+            )
         )
 
     def list(self, request):

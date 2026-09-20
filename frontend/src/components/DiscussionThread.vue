@@ -366,7 +366,7 @@ export default {
         );
         if (requestId !== this.sheetRequestId) return;
         const rows = pageResults(response);
-        this.sheetReplies = page === 1 ? rows : [...this.sheetReplies, ...rows];
+        this.sheetReplies = this.mergeReplies(page === 1 ? rows : [...this.sheetReplies, ...rows]);
         this.sheetPage = page;
         this.sheetNext = response.next;
       } catch (error) {
@@ -402,7 +402,7 @@ export default {
       if (await this.$refs.replyForm.validate() !== true) return;
       this.sendingReply = true;
       try {
-        await this.submitComment(
+        const created = await this.submitComment(
           this.sheet.parent.id,
           this.sheet.replyTarget?.id || null,
         );
@@ -412,7 +412,8 @@ export default {
           ...this.sheet.parent,
           reply_count: (this.sheet.parent.reply_count || 0) + 1,
         };
-        await this.loadSheetReplies();
+        this.sheetReplies = this.mergeReplies([...this.sheetReplies, created]);
+        if (this.sheetReplies.length >= this.sheet.parent.reply_count) this.sheetNext = null;
         await this.loadComments();
         notify({ title: '回复已发送' });
       } catch (error) {
@@ -428,7 +429,7 @@ export default {
         this.requestSignature = signature;
         this.requestId = commentRequestId();
       }
-      await createComment({
+      const created = await createComment({
         [`${this.targetType}_id`]: this.targetId,
         parent_id: parentId,
         reply_to_id: replyToId,
@@ -437,6 +438,15 @@ export default {
       }, this.targetType);
       this.requestSignature = '';
       this.requestId = '';
+      return created;
+    },
+    mergeReplies(rows) {
+      const byId = new Map();
+      rows.filter(Boolean).forEach((reply) => byId.set(reply.id, reply));
+      return [...byId.values()].sort((left, right) => {
+        const byTime = String(left.created_at || '').localeCompare(String(right.created_at || ''));
+        return byTime || Number(left.id) - Number(right.id);
+      });
     },
     async toggleCommentLike(comment) {
       if (this.busy || !this.auth()) return;

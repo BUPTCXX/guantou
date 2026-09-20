@@ -71,6 +71,23 @@ describe('notification center', () => {
     expect(wrapper.vm.senderInitial(notification)).toBe('乡');
   });
 
+  it('accepts the TDesign tabs event shapes when changing filters', async () => {
+    const wrapper = mountCenter();
+
+    wrapper.vm.setFilter({ value: 'reply' });
+    await flushPromises();
+    expect(wrapper.vm.filter).toBe('reply');
+    expect(listNotifications).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 20,
+      verb: 'entry.comment,entry.reply,recording.comment,recording.reply',
+    });
+
+    wrapper.vm.setFilter({ detail: { value: 'unread' } });
+    await flushPromises();
+    expect(wrapper.vm.filter).toBe('unread');
+  });
+
   it('marks one notification read before opening its target', async () => {
     const wrapper = mountCenter();
     wrapper.vm.notifications = [notification];
