@@ -45,16 +45,16 @@ make api-contract-check
 - `GET /recordings/?following=true`：关注作者的公开录音；游客返回空列表。
 - `GET /recordings/daily/`、`random/`：公开每日精选／随机录音；没有候选时返回 204。
 - `PUT/DELETE /recordings/{id}/like/`：点赞／取消；返回 `liked`、`like_count`。
-- `GET /recording-comments/?recording_id=...&page=...`：标准分页，只返回可见的评论及一层回复。
-- `POST /recording-comments/`：`{recording_id,body,parent_id:null,client_id:"UUID"}`；同一作者重试相同请求返回原评论，改变内容需新 UUID。
+- `GET /recording-comments/?recording_id=...&page=...`：标准分页返回一级评论；响应含 `reply_count` 和最早三条 `recent_replies`。传 `parent_id=<一级评论 ID>` 分页读取该讨论串全部回复。
+- `POST /recording-comments/`：`{recording_id,body,parent_id:null,reply_to_id:null,client_id:"UUID"}`；`parent_id` 指定讨论串，`reply_to_id` 可进一步指定该串中的具体回复；同一作者重试相同请求返回原评论，改变内容需新 UUID。
 - `DELETE /recording-comments/{id}/`：作者删除／管理员隐藏，该评论下回复不再展示。
 - `PUT/DELETE /recording-comments/{id}/like/`：评论点赞／取消。
 - `GET /entries/suggestions/?q=...`、`popular/`：最多 8 个公开词条；推荐依照公开录音点赞及有效地区补证，不计私人收藏，不记录搜索原词。
 
-评论、回复和点赞通知复用消息中心，跳转录音详情；不重复发送自身通知，消息正文不复制录音或评论原文。
+评论、回复和点赞通知复用消息中心，跳转录音详情；不重复发送自身通知，消息正文不复制录音或评论原文。`GET /notifications?verb=entry.reply,recording.reply` 使用英文逗号传多个完整 verb，服务端按任一命中筛选；空 verb 返回 400。
 
 ### Entry 讨论（v1 能力二次补缺）
 
-`GET /entry-comments/?entry_id=<id>&page=1` 浏览可见词条讨论；`POST /entry-comments/` 接收 `entry_id`、`body`、`client_id`（UUID）及可选 `parent_id`。POST 必须且只能给出 entry_id，不能混入 recording_id；目标未公开即使本人可读取，也不能新增评论。一级回复必须属于同一词条，重复 UUID 与不同目标／正文冲突返回 400。
+`GET /entry-comments/?entry_id=<id>&page=1` 浏览一级讨论并返回 `reply_count`、`recent_replies`；传 `parent_id` 分页读取完整回复。`POST /entry-comments/` 接收 `entry_id`、`body`、`client_id`（UUID）及可选 `parent_id`、`reply_to_id`。POST 必须且只能给出 entry_id，不能混入 recording_id；目标未公开即使本人可读取，也不能新增评论。回复必须属于同一词条和同一讨论串，重复 UUID 与不同目标／正文冲突返回 400。
 
 `DELETE /entry-comments/{id}/` 作者删除／管理员隐藏；`PUT` / `DELETE /entry-comments/{id}/like/` 点赞／取消。录音与词条接口互不读取或修改对方评论。事件为 `entry.comment`、`entry.reply`、`entry.comment_like`，通知回到对应词条；不把评论正文放进通知。隐藏主评论后回复同样不公开展示。

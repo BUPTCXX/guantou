@@ -27,30 +27,19 @@
           </view>
         </view>
 
-        <view
+        <t-tabs
           class="filters"
-          role="tablist"
-          aria-label="消息筛选"
+          :value="filter"
+          @change="setFilter"
         >
-          <button
+          <t-tab-panel
             v-for="option in filterOptions"
             :key="option.key"
-            :class="['filter', { active: filter === option.key }]"
-            role="tab"
-            :aria-selected="filter === option.key"
+            :value="option.key"
+            :label="filterLabel(option)"
             :disabled="loading"
-            hover-class="filter--pressed"
-            @tap="setFilter(option.key)"
-          >
-            {{ option.label }}
-            <text
-              v-if="option.key === 'unread' && unreadCount"
-              class="filter-count"
-            >
-              {{ unreadCount }}
-            </text>
-          </button>
-        </view>
+          />
+        </t-tabs>
 
         <BaseLoading
           v-if="loading && !notifications.length"
@@ -163,6 +152,8 @@
 </template>
 
 <script>
+import TTabPanel from '@tdesign/uniapp/tab-panel/tab-panel.vue';
+import TTabs from '@tdesign/uniapp/tabs/tabs.vue';
 import BaseButton from '@/components/BaseButton.vue';
 import BaseLoading from '@/components/BaseLoading.vue';
 import EmptyState from '@/components/EmptyState.vue';
@@ -187,7 +178,7 @@ const VERB_FILTERS = Object.freeze({
 
 export default {
   components: {
-    BaseButton, BaseLoading, EmptyState, PageShell,
+    BaseButton, BaseLoading, EmptyState, PageShell, TTabPanel, TTabs,
   },
   data() {
     return {
@@ -232,7 +223,13 @@ export default {
     senderInitial(item) {
       return String(item?.from?.nickname || '乡').trim().slice(0, 1) || '乡';
     },
-    setFilter(filter) {
+    filterLabel(option) {
+      return option.key === 'unread' && this.unreadCount
+        ? `${option.label} ${this.unreadCount}`
+        : option.label;
+    },
+    setFilter(event) {
+      const filter = event?.detail?.value ?? event?.value ?? event?.detail ?? event;
       if (this.filter === filter || this.loading) return;
       this.filter = filter;
       this.refresh();
@@ -353,50 +350,8 @@ export default {
 }
 
 .filters {
-  display: flex;
-  gap: var(--space-2);
+  display: block;
   margin: var(--space-3) 0;
-  overflow-x: auto;
-}
-
-.filter {
-  flex: 0 0 auto;
-  width: auto;
-  min-width: 112rpx;
-  margin: 0;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-pill);
-  background: var(--surface-color);
-  color: var(--text-secondary-color);
-  font-size: var(--font-size-sm);
-  line-height: 60rpx;
-  white-space: nowrap;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.filter.active {
-  border-color: var(--accent-color);
-  background: var(--accent-color);
-  color: var(--on-accent-color);
-}
-
-.filter[disabled] {
-  opacity: 0.58;
-}
-
-.filter::after {
-  border: 0;
-}
-
-.filter--pressed {
-  transform: scale(0.98);
-  opacity: 0.85;
-}
-
-.filter-count {
-  margin-left: 6rpx;
-  font-size: var(--font-size-xs);
 }
 
 .notification-list {
@@ -536,7 +491,6 @@ export default {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .filter,
   .notification-card {
     transition: none;
   }

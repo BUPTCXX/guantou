@@ -179,6 +179,35 @@ describe('discussion replies sheet', () => {
     expect(detail.sheet.parent.id).toBe(2);
     expect(detail.sheetReplies[0].parent_id).toBe(2);
   });
+
+  it('keeps the sixteenth reply visible from the POST response', async () => {
+    const existing = Array.from({ length: 15 }, (_, index) => makeReply(index + 1, 1));
+    const created = {
+      ...makeReply(16, 1),
+      created_at: '2026-09-20T12:00:00Z',
+    };
+    createComment.mockResolvedValue(created);
+    listComments.mockResolvedValue({ results: [], next: null });
+    const detail = context(Detail, {
+      targetId: 5,
+      targetType: 'recording',
+      sheet: {
+        visible: true,
+        parent: { id: 1, author_name: '楼主', body: '顶层留言', reply_count: 15 },
+        replyTarget: null,
+      },
+      sheetReplies: existing,
+      replyDraft: { body: '第十六条回复' },
+      $refs: { replyForm: { validate: async () => true } },
+    });
+
+    await detail.sendReply();
+
+    expect(detail.sheetReplies.map((reply) => reply.id)).toContain(16);
+    expect(detail.sheetReplies).toHaveLength(16);
+    expect(detail.sheet.parent.reply_count).toBe(16);
+    expect(listComments).toHaveBeenCalledTimes(1);
+  });
 });
 
 it('clears displayed draft content when returning under another account', () => {
