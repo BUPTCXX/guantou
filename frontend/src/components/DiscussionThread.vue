@@ -378,6 +378,43 @@ export default {
         }
       }
     },
+    async reloadSheetReplies() {
+      if (!this.sheet.parent) return;
+      // 发帖后回到第一页会让第 16 条及以后的新回复从面板消失；
+      // 这里作废在途请求并整段重载，保证列表连续且包含刚发送的回复。
+      this.sheetRequestId += 1;
+      const requestId = this.sheetRequestId;
+      this.sheetReplies = [];
+      this.sheetPage = 1;
+      this.sheetNext = null;
+      this.sheetLoading = true;
+      this.sheetError = '';
+      try {
+        await this.loadSheetRepliesPage(1, requestId);
+      } catch (error) {
+        if (requestId !== this.sheetRequestId) return;
+        this.sheetError = '回复暂时无法读取';
+      } finally {
+        if (requestId === this.sheetRequestId) {
+          this.sheetLoading = false;
+        }
+      }
+    },
+    async loadSheetRepliesPage(page, requestId) {
+      const response = await listComments(
+        this.targetId,
+        page,
+        this.targetType,
+        this.sheet.parent.id,
+      );
+      if (requestId !== this.sheetRequestId) return;
+      this.sheetReplies = [...this.sheetReplies, ...pageResults(response)];
+      this.sheetPage = page;
+      this.sheetNext = response.next;
+      if (response.next) {
+        await this.loadSheetRepliesPage(page + 1, requestId);
+      }
+    },
     async sendTopLevel() {
       if (this.sendingTop || !this.auth()) return;
       if (await this.$refs.commentForm.validate() !== true) return;
@@ -412,7 +449,7 @@ export default {
           ...this.sheet.parent,
           reply_count: (this.sheet.parent.reply_count || 0) + 1,
         };
-        await this.loadSheetReplies();
+        await this.reloadSheetReplies();
         await this.loadComments();
         notify({ title: '回复已发送' });
       } catch (error) {

@@ -179,6 +179,39 @@ describe('discussion replies sheet', () => {
     expect(detail.sheet.parent.id).toBe(2);
     expect(detail.sheetReplies[0].parent_id).toBe(2);
   });
+
+  it('keeps the newest reply visible after sending past the first page', async () => {
+    const firstPage = Array.from({ length: 15 }, (_, i) => makeReply(i + 1, 1));
+    listComments.mockImplementation(async (id, page, type, parentId) => (
+      page === 1
+        ? { results: firstPage, next: 'next-page' }
+        : { results: [makeReply(16, parentId)], next: null }
+    ));
+    createComment.mockResolvedValue({ id: 16, parent_id: 1, body: '回复16' });
+
+    const detail = context(Detail, {
+      targetId: 5,
+      targetType: 'recording',
+      sheet: {
+        visible: true,
+        parent: {
+          id: 1, author_name: '楼主', body: '顶层留言', reply_count: 15,
+        },
+        replyTarget: null,
+      },
+      replyDraft: { body: '回复16' },
+      $refs: { replyForm: { validate: async () => true } },
+    });
+
+    await detail.sendReply();
+
+    expect(detail.sheetReplies.map((item) => item.id)).toEqual([
+      ...firstPage.map((item) => item.id),
+      16,
+    ]);
+    expect(detail.sheetNext).toBeNull();
+    expect(detail.sheet.parent.reply_count).toBe(16);
+  });
 });
 
 it('clears displayed draft content when returning under another account', () => {
