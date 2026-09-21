@@ -3,7 +3,9 @@ import warnings
 
 from django.contrib.auth.models import User
 from django.core.paginator import UnorderedObjectListWarning
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient
 from inbox.models import Notification
 from user.models import UserFollow
@@ -315,6 +317,58 @@ class RestorationTests(TestCase):
         self.assertEqual(len(page1_ids), 15)
         self.assertEqual(len(page2_ids), 3)
         self.assertEqual(page1_ids + page2_ids, created_ids)
+
+    def test_comment_list_query_count_does_not_grow_with_rows(self):
+        data = {
+            "recording_id": self.recording.id,
+            "body": "顶层留言",
+            "client_id": str(uuid.uuid4()),
+        }
+
+        def count_list_queries():
+            with CaptureQueriesContext(connection) as captured:
+                self.client.get(
+                    "/recording-comments/",
+                    {"recording_id": self.recording.id},
+                )
+            return len(captured)
+
+        top = self.client.post("/recording-comments/", data, format="json")
+        self.client.post(
+            "/recording-comments/",
+            {
+                **data,
+                "client_id": str(uuid.uuid4()),
+                "parent_id": top.data["id"],
+                "body": "回复一",
+            },
+            format="json",
+        )
+        small = count_list_queries()
+
+        for index in range(3):
+            extra = self.client.post(
+                "/recording-comments/",
+                {
+                    **data,
+                    "client_id": str(uuid.uuid4()),
+                    "body": f"顶层{index}",
+                },
+                format="json",
+            )
+            self.client.post(
+                "/recording-comments/",
+                {
+                    **data,
+                    "client_id": str(uuid.uuid4()),
+                    "parent_id": extra.data["id"],
+                    "body": f"回复{index}",
+                },
+                format="json",
+            )
+        large = count_list_queries()
+
+        self.assertEqual(small, large)
 
     def test_search_daily_following_and_hidden_entry_link(self):
         self.assertEqual(

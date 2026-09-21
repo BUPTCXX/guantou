@@ -423,8 +423,10 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_recent_replies(self, obj):
         if obj.parent_id:
             return []
-        replies = obj.replies.filter(hidden=False).order_by("created_at", "id")[:3]
-        return CommentSerializer(replies, many=True, context=self.context).data
+        replies = getattr(obj, "prefetched_replies", None)
+        if replies is None:
+            replies = obj.replies.filter(hidden=False).order_by("created_at", "id")
+        return CommentSerializer(replies[:3], many=True, context=self.context).data
 
     def get_reply_to_author_name(self, obj):
         if not obj.reply_to_id:
@@ -432,13 +434,17 @@ class CommentSerializer(serializers.ModelSerializer):
         return obj.reply_to.author.username
 
     def get_like_count(self, obj):
-        return obj.likes.count()
+        likes = getattr(obj, "_prefetched_objects_cache", {}).get("likes")
+        return len(likes) if likes is not None else obj.likes.count()
 
     def get_liked(self, obj):
         user = self.context["request"].user
-        return user.is_authenticated and any(
-            like.user_id == user.id for like in obj.likes.all()
-        )
+        if not user.is_authenticated:
+            return False
+        likes = getattr(obj, "_prefetched_objects_cache", {}).get("likes")
+        if likes is not None:
+            return any(like.user_id == user.id for like in likes)
+        return obj.likes.filter(user_id=user.id).exists()
 
     def get_editable(self, obj):
         user = self.context["request"].user
@@ -485,6 +491,12 @@ class RecordingCommentViewSet(viewsets.GenericViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
+        recent_replies = (
+            RecordingComment.objects.filter(hidden=False)
+            .select_related("author", "reply_to__author")
+            .prefetch_related("likes")
+            .order_by("created_at", "id")
+        )
         return (
             RecordingComment.objects.filter(
                 **{f"{self.target_type}__in": self.visible_targets()},
@@ -508,7 +520,14 @@ class RecordingCommentViewSet(viewsets.GenericViewSet):
                 "parent__author",
                 "reply_to__author",
             )
-            .prefetch_related("likes")
+            .prefetch_related(
+                "likes",
+                Prefetch(
+                    "replies",
+                    queryset=recent_replies,
+                    to_attr="prefetched_replies",
+                ),
+            )
         )
 
     def list(self, request):
