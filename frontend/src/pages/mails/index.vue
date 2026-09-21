@@ -32,15 +32,18 @@
           role="tablist"
           aria-label="消息筛选"
         >
-          <button
+          <BaseButton
             v-for="option in filterOptions"
             :key="option.key"
-            :class="['filter', { active: filter === option.key }]"
+            class="filter"
             role="tab"
+            size="small"
+            :variant="filter === option.key ? 'primary' : 'ghost'"
+            :text="option.label"
+            :aria-label="`${option.label}筛选`"
             :aria-selected="filter === option.key"
             :disabled="loading"
-            hover-class="filter--pressed"
-            @tap="setFilter(option.key)"
+            @click="setFilter(option.key)"
           >
             {{ option.label }}
             <text
@@ -49,7 +52,7 @@
             >
               {{ unreadCount }}
             </text>
-          </button>
+          </BaseButton>
         </view>
 
         <BaseLoading
@@ -361,37 +364,9 @@ export default {
 
 .filter {
   flex: 0 0 auto;
-  width: auto;
   min-width: 112rpx;
   margin: 0;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-pill);
-  background: var(--surface-color);
-  color: var(--text-secondary-color);
-  font-size: var(--font-size-sm);
-  line-height: 60rpx;
   white-space: nowrap;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-}
-
-.filter.active {
-  border-color: var(--accent-color);
-  background: var(--accent-color);
-  color: var(--on-accent-color);
-}
-
-.filter[disabled] {
-  opacity: 0.58;
-}
-
-.filter::after {
-  border: 0;
-}
-
-.filter--pressed {
-  transform: scale(0.98);
-  opacity: 0.85;
 }
 
 .filter-count {

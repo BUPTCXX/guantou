@@ -7,6 +7,7 @@ vi.mock('@/services/mail', () => ({
 }));
 
 import NotificationCenter from '@/pages/mails/index.vue';
+import BaseButton from '@/components/BaseButton.vue';
 import { listNotifications, markNotificationsRead } from '@/services/mail';
 
 const notification = {
@@ -69,6 +70,29 @@ describe('notification center', () => {
     expect(wrapper.vm.introTitle).toBe('1 条未读消息');
     expect(wrapper.vm.headerActionText).toBe('全部已读');
     expect(wrapper.vm.senderInitial(notification)).toBe('乡');
+  });
+
+  it('renders every filter through BaseButton and sends grouped verbs', async () => {
+    const wrapper = mountCenter();
+    const filters = wrapper.findAllComponents(BaseButton);
+
+    expect(filters).toHaveLength(5);
+    expect(filters.map((filter) => filter.text())).toEqual([
+      '全部',
+      '未读',
+      '回复',
+      '点赞',
+      '收藏',
+    ]);
+
+    wrapper.vm.setFilter('reply');
+    await flushPromises();
+
+    expect(listNotifications).toHaveBeenCalledWith({
+      page: 1,
+      pageSize: 20,
+      verb: 'entry.comment,entry.reply,recording.comment,recording.reply',
+    });
   });
 
   it('marks one notification read before opening its target', async () => {
