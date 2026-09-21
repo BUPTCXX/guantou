@@ -209,6 +209,28 @@ class InboxApiTests(TestCase):
             Notification.Verb.RECORDING_LIKE,
         )
 
+        response = self.client.get(
+            "/notifications",
+            {"verb": "recording.like,entry.bookmark"},
+            HTTP_AUTHORIZATION=bearer(self.recipient),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 2)
+        self.assertEqual(
+            {item["verb"] for item in response.json()["notifications"]},
+            {
+                Notification.Verb.RECORDING_LIKE,
+                Notification.Verb.ENTRY_BOOKMARK,
+            },
+        )
+
+        empty = self.client.get(
+            "/notifications",
+            {"verb": ","},
+            HTTP_AUTHORIZATION=bearer(self.recipient),
+        )
+        self.assertEqual(empty.status_code, 400)
+
     def test_event_notification_suppresses_self_notifications(self):
         result = send_event_notification(
             actor=self.sender,
