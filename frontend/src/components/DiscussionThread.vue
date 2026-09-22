@@ -31,8 +31,9 @@
     >
       <view
         v-for="comment in comments"
+        :id="`comment-${comment.id}`"
         :key="comment.id"
-        class="comment-card"
+        :class="['comment-card', { 'comment-card--anchor': isAnchor(comment.id) }]"
       >
         <view class="comment-main">
           <view class="comment-meta">
@@ -145,6 +146,7 @@
       <scroll-view
         scroll-y
         class="reply-sheet__scroll"
+        :scroll-into-view="sheetScrollTarget"
       >
         <view class="reply-sheet__parent">
           <text class="comment-author">
@@ -166,8 +168,9 @@
         />
         <view
           v-for="reply in sheetReplies"
+          :id="`reply-${reply.id}`"
           :key="reply.id"
-          class="reply-item"
+          :class="['reply-item', { 'reply-item--anchor': isAnchor(reply.id) }]"
         >
           <view class="comment-meta">
             <text class="reply-author">
@@ -281,6 +284,8 @@ export default {
       default: 'recording',
       validator: (value) => ['entry', 'recording'].includes(value),
     },
+    anchorCommentId: { type: [Number, String], default: null },
+    anchorRootId: { type: [Number, String], default: null },
   },
   data: () => ({
     busy: false,
@@ -303,16 +308,24 @@ export default {
     sheetLoading: false,
     sheetError: '',
     sheetRequestId: 0,
+    sheetScrollTarget: '',
   }),
   mounted() {
-    this.loadComments();
+    this.initializeDiscussion();
   },
   methods: {
+    async initializeDiscussion() {
+      await this.loadComments();
+      await this.focusAnchor();
+    },
     auth() {
       return requireAuth(
         this.targetType === 'entry' ? 'interact_entry' : 'interact_recording',
         { [`${this.targetType}Id`]: this.targetId },
       );
+    },
+    isAnchor(id) {
+      return String(id) === String(this.anchorCommentId || '');
     },
     likeLabel(comment) {
       return `${comment.liked ? '已赞' : '赞'} ${comment.like_count || 0}`;
@@ -321,7 +334,7 @@ export default {
       return String(value || '').replace('T', ' ').slice(5, 16);
     },
     async loadComments(more = false) {
-      if (this.commentsLoading) return;
+      if (this.commentsLoading) return null;
       this.commentsLoading = true;
       this.commentsError = '';
       const page = more ? this.commentsPage + 1 : 1;
@@ -331,10 +344,46 @@ export default {
         this.comments = page === 1 ? rows : [...this.comments, ...rows];
         this.commentsPage = page;
         this.commentsNext = response.next;
+        return rows;
       } catch (error) {
         this.commentsError = '留言暂时无法读取';
+        return null;
       } finally {
         this.commentsLoading = false;
+      }
+    },
+    async loadCommentsUntil(targetId) {
+      const found = this.comments.find(
+        (comment) => String(comment.id) === String(targetId),
+      );
+      if (found) return found;
+      if (!this.commentsNext) return null;
+      const rows = await this.loadComments(true);
+      if (!rows?.length) return null;
+      return this.loadCommentsUntil(targetId);
+    },
+    async focusAnchor() {
+      const commentId = Number(this.anchorCommentId) || null;
+      if (!commentId) return;
+      const rootId = Number(this.anchorRootId) || commentId;
+      const root = await this.loadCommentsUntil(rootId);
+      if (!root) return;
+      if (String(rootId) === String(commentId)) {
+        await this.scrollToComment(commentId);
+        return;
+      }
+      await this.openReplies(root);
+      if (await this.loadSheetRepliesUntil(commentId)) {
+        this.sheetScrollTarget = `reply-${commentId}`;
+      }
+    },
+    async scrollToComment(commentId) {
+      await this.$nextTick();
+      if (typeof uni !== 'undefined' && typeof uni.pageScrollTo === 'function') {
+        uni.pageScrollTo({
+          selector: `#comment-${commentId}`,
+          duration: 300,
+        });
       }
     },
     async openReplies(comment) {
@@ -343,6 +392,7 @@ export default {
       this.sheetPage = 1;
       this.sheetNext = null;
       this.sheetLoading = false;
+      this.sheetScrollTarget = '';
       this.sheetRequestId += 1;
       this.replyDraft.body = '';
       await this.loadSheetReplies();
@@ -350,9 +400,10 @@ export default {
     closeReplies() {
       this.sheetRequestId += 1;
       this.sheet = { visible: false, parent: null, replyTarget: null };
+      this.sheetScrollTarget = '';
     },
     async loadSheetReplies(more = false) {
-      if (this.sheetLoading || !this.sheet.parent) return;
+      if (this.sheetLoading || !this.sheet.parent) return null;
       const requestId = this.sheetRequestId;
       this.sheetLoading = true;
       this.sheetError = '';
@@ -364,19 +415,30 @@ export default {
           this.targetType,
           this.sheet.parent.id,
         );
-        if (requestId !== this.sheetRequestId) return;
+        if (requestId !== this.sheetRequestId) return null;
         const rows = pageResults(response);
         this.sheetReplies = page === 1 ? rows : [...this.sheetReplies, ...rows];
         this.sheetPage = page;
         this.sheetNext = response.next;
+        return rows;
       } catch (error) {
-        if (requestId !== this.sheetRequestId) return;
+        if (requestId !== this.sheetRequestId) return null;
         this.sheetError = '回复暂时无法读取';
+        return null;
       } finally {
         if (requestId === this.sheetRequestId) {
           this.sheetLoading = false;
         }
       }
+    },
+    async loadSheetRepliesUntil(targetId) {
+      if (this.sheetReplies.some((reply) => String(reply.id) === String(targetId))) {
+        return true;
+      }
+      if (!this.sheetNext) return false;
+      const rows = await this.loadSheetReplies(true);
+      if (!rows?.length) return false;
+      return this.loadSheetRepliesUntil(targetId);
     },
     async reloadSheetReplies() {
       if (!this.sheet.parent) return;
@@ -548,6 +610,11 @@ export default {
   background: var(--surface-color);
 }
 
+.comment-card--anchor {
+  border-color: var(--accent-color);
+  box-shadow: inset 6rpx 0 0 var(--accent-color);
+}
+
 .comment-meta {
   display: flex;
   align-items: baseline;
@@ -617,6 +684,11 @@ export default {
   padding: var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--surface-color);
+}
+
+.reply-item--anchor {
+  border: 1px solid var(--accent-color);
+  background: var(--accent-subtle-color);
 }
 
 .more-replies {

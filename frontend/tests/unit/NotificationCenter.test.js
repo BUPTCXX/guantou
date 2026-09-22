@@ -109,6 +109,42 @@ describe('notification center', () => {
     });
   });
 
+  it('opens comment notifications at the top-level or reply anchor', async () => {
+    const wrapper = mountCenter();
+    const topLevel = {
+      ...notification,
+      id: 13,
+      target: {
+        type: 'entry',
+        id: 9,
+        url: '/pages/entries/details?id=9',
+        comment_id: 42,
+        parent_comment_id: null,
+      },
+    };
+    const reply = {
+      ...notification,
+      id: 14,
+      target: {
+        type: 'recording',
+        id: 5,
+        url: '/pages/recordings/details?id=5',
+        comment_id: 16,
+        parent_comment_id: 1,
+      },
+    };
+
+    await wrapper.vm.openNotification(topLevel);
+    expect(uni.navigateTo).toHaveBeenLastCalledWith({
+      url: '/pages/entries/details?id=9&comment=42&root=42',
+    });
+
+    await wrapper.vm.openNotification(reply);
+    expect(uni.navigateTo).toHaveBeenLastCalledWith({
+      url: '/pages/recordings/details?id=5&comment=16&root=1',
+    });
+  });
+
   it('marks the loaded collection read in one request', async () => {
     const wrapper = mountCenter();
     wrapper.vm.notifications = [notification];

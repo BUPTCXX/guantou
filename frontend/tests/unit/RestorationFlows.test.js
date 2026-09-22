@@ -212,6 +212,69 @@ describe('discussion replies sheet', () => {
     expect(detail.sheetNext).toBeNull();
     expect(detail.sheet.parent.reply_count).toBe(16);
   });
+
+  it('loads and focuses a top-level comment anchor from a later page', async () => {
+    listComments
+      .mockResolvedValueOnce({
+        results: [{
+          id: 1, author_name: 'A', body: '首页评论', recent_replies: [], reply_count: 0,
+        }],
+        next: 'next-page',
+      })
+      .mockResolvedValueOnce({
+        results: [{
+          id: 42, author_name: 'B', body: '目标评论', recent_replies: [], reply_count: 0,
+        }],
+        next: null,
+      });
+    globalThis.uni = { pageScrollTo: vi.fn() };
+
+    const detail = context(Detail, {
+      targetId: 5,
+      targetType: 'recording',
+      anchorCommentId: 42,
+      anchorRootId: 42,
+      $nextTick: vi.fn(),
+    });
+    await detail.loadComments();
+    await detail.focusAnchor();
+
+    expect(detail.comments.map((comment) => comment.id)).toEqual([1, 42]);
+    expect(uni.pageScrollTo).toHaveBeenCalledWith({
+      selector: '#comment-42',
+      duration: 300,
+    });
+    delete globalThis.uni;
+  });
+
+  it('opens the parent thread and focuses a reply anchor from a later page', async () => {
+    const root = {
+      id: 1, author_name: '楼主', body: '顶层留言', reply_count: 16,
+    };
+    listComments.mockImplementation(async (id, page, type, parentId) => {
+      if (!parentId) return { results: [root], next: null };
+      return page === 1
+        ? {
+          results: Array.from({ length: 15 }, (_, index) => makeReply(index + 1, parentId)),
+          next: 'next-page',
+        }
+        : { results: [makeReply(16, parentId)], next: null };
+    });
+
+    const detail = context(Detail, {
+      targetId: 5,
+      targetType: 'recording',
+      anchorCommentId: 16,
+      anchorRootId: 1,
+    });
+    await detail.loadComments();
+    await detail.focusAnchor();
+
+    expect(detail.sheet.visible).toBe(true);
+    expect(detail.sheet.parent.id).toBe(1);
+    expect(detail.sheetReplies.map((reply) => reply.id)).toContain(16);
+    expect(detail.sheetScrollTarget).toBe('reply-16');
+  });
 });
 
 it('clears displayed draft content when returning under another account', () => {

@@ -170,7 +170,7 @@ import BaseButton from '@/components/BaseButton.vue';
 import BaseLoading from '@/components/BaseLoading.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import PageShell from '@/components/PageShell.vue';
-import { openPage } from '@/services/navigation';
+import { openPage, ROUTES } from '@/services/navigation';
 import { toMailDetailsPage } from '@/routers/mail';
 import { listNotifications, markNotificationsRead } from '@/services/mail';
 
@@ -300,8 +300,23 @@ export default {
           // Reading the message is still useful when the read-state request fails.
         }
       }
-      if (item.target?.url) {
-        openPage(item.target.url);
+      const target = item.target || {};
+      if (
+        target.comment_id
+        && (target.type === 'entry' || target.type === 'recording')
+      ) {
+        openPage(
+          target.type === 'entry' ? ROUTES.entryDetail : ROUTES.recordingDetail,
+          {
+            id: target.id,
+            comment: target.comment_id,
+            root: target.parent_comment_id || target.comment_id,
+          },
+        );
+        return;
+      }
+      if (target.url) {
+        openPage(target.url);
         return;
       }
       toMailDetailsPage(item.id);
