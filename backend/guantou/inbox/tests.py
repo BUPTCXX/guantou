@@ -165,6 +165,8 @@ class InboxApiTests(TestCase):
                 "target_type": "entry",
                 "target_id": 42,
                 "target_url": "/pages/entries/details?id=42",
+                "comment_id": 7,
+                "parent_comment_id": 3,
             },
         )
 
@@ -179,7 +181,13 @@ class InboxApiTests(TestCase):
         self.assertEqual(item["verb"], Notification.Verb.USAGE_ATTESTATION)
         self.assertEqual(
             item["target"],
-            {"type": "entry", "id": 42, "url": "/pages/entries/details?id=42"},
+            {
+                "type": "entry",
+                "id": 42,
+                "url": "/pages/entries/details?id=42",
+                "comment_id": 7,
+                "parent_comment_id": 3,
+            },
         )
 
     def test_list_filters_by_verb(self):
@@ -230,6 +238,13 @@ class InboxApiTests(TestCase):
             HTTP_AUTHORIZATION=bearer(self.recipient),
         )
         self.assertEqual(empty.status_code, 400)
+
+        unknown = self.client.get(
+            "/notifications",
+            {"verb": "recording.like,not-a-verb"},
+            HTTP_AUTHORIZATION=bearer(self.recipient),
+        )
+        self.assertEqual(unknown.status_code, 400)
 
     def test_event_notification_suppresses_self_notifications(self):
         result = send_event_notification(

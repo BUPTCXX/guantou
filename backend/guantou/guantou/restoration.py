@@ -327,6 +327,13 @@ def event_once(actor, recipient, verb, recording, comment=None):
         "target_id": recording.id,
         "target_url": f"/pages/{'entries' if target_type == 'entry' else 'recordings'}/details?id={recording.id}",
     }
+    if comment is not None:
+        metadata.update(
+            {
+                "comment_id": comment.id,
+                "parent_comment_id": comment.parent_id,
+            }
+        )
     obj = comment or recording
     # One notification per actor/object/verb, including unlike/re-like.
     from django.contrib.contenttypes.models import ContentType

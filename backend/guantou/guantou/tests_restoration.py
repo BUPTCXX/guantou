@@ -216,6 +216,45 @@ class RestorationTests(TestCase):
         self.assertEqual(len(replies), 4)
         self.assertEqual([item["parent_id"] for item in replies], [top_id] * 4)
 
+    def test_comment_notifications_include_anchor_metadata(self):
+        data = {
+            "recording_id": self.recording.id,
+            "body": "顶层留言",
+            "client_id": str(uuid.uuid4()),
+        }
+        top = self.client.post("/recording-comments/", data, format="json")
+        self.assertEqual(top.status_code, 201, top.data)
+
+        top_notification = Notification.objects.get(
+            verb=Notification.Verb.RECORDING_COMMENT,
+            recipient=self.other,
+        )
+        self.assertEqual(top_notification.metadata["comment_id"], top.data["id"])
+        self.assertIsNone(top_notification.metadata["parent_comment_id"])
+
+        self.client.force_authenticate(self.other)
+        reply = self.client.post(
+            "/recording-comments/",
+            {
+                **data,
+                "client_id": str(uuid.uuid4()),
+                "parent_id": top.data["id"],
+                "body": "回复顶层留言",
+            },
+            format="json",
+        )
+        self.assertEqual(reply.status_code, 201, reply.data)
+
+        reply_notification = Notification.objects.get(
+            verb=Notification.Verb.RECORDING_REPLY,
+            recipient=self.user,
+        )
+        self.assertEqual(reply_notification.metadata["comment_id"], reply.data["id"])
+        self.assertEqual(
+            reply_notification.metadata["parent_comment_id"],
+            top.data["id"],
+        )
+
     def test_reply_to_reply_targets_the_specific_comment(self):
         data = {
             "recording_id": self.recording.id,
