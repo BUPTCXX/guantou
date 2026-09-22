@@ -59,4 +59,4 @@ make api-contract-check
 
 `DELETE /entry-comments/{id}/` 作者删除／管理员隐藏；`PUT` / `DELETE /entry-comments/{id}/like/` 点赞／取消。录音与词条接口互不读取或修改对方评论。事件为 `entry.comment`、`entry.reply`、`entry.comment_like`，通知回到对应词条；不把评论正文放进通知。隐藏主评论后回复同样不公开展示。
 
-消息中心 `GET /notifications` 支持 `unread`、`page`、`pageSize` 和逗号分隔的 `verb` 过滤；`verb=entry.comment,entry.reply` 表示按事件类型做 OR 筛选。`reply`、`like`、`bookmark` 等前端分类应映射到对应事件组，不要新增含义模糊的客户端过滤。
+消息中心 `GET /notifications` 支持 `unread`、`page`、`pageSize` 和逗号分隔的 `verb` 过滤；`verb=entry.comment,entry.reply` 表示按事件类型做 OR 筛选。评论与回复通知的 `target` 还带 `comment_id` 和 `parent_comment_id`：顶层评论用前者定位一级评论，回复用后者进入对应讨论串并加载具体回复。未知 `verb` 返回 400，避免拼错后静默返回空列表。`reply`、`like`、`bookmark` 等前端分类应映射到对应事件组，不要新增含义模糊的客户端过滤。

@@ -1481,6 +1481,14 @@ components:
           nullable: true
         url:
           type: string
+        comment_id:
+          type: integer
+          nullable: true
+          description: 通知对应的评论或回复 ID
+        parent_comment_id:
+          type: integer
+          nullable: true
+          description: 回复通知对应的一级评论 ID；顶层评论通知为 null
     Notification:
       type: object
       properties:
