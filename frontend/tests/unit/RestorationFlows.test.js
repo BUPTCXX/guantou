@@ -115,12 +115,49 @@ describe('draft interruption recovery', () => {
 describe('entry discussion payload', () => {
   it('posts to Entry discussion without accidentally attaching a Recording', async () => {
     const detail = context(Detail, { targetId: 9, targetType: 'entry', form: { body: '另一种用法' }, $refs: { commentForm: { validate: async () => true } } });
-    createComment.mockResolvedValue({ id: 1 });
-    listComments.mockResolvedValue({ results: [], next: null });
+    createComment.mockResolvedValue({ id: 1, created_at: '2026-09-01T00:00:00Z' });
     await detail.sendTopLevel();
     expect(createComment).toHaveBeenCalledWith(expect.objectContaining({ entry_id: 9 }), 'entry');
     expect(createComment.mock.calls[0][0]).not.toHaveProperty('recording_id');
-    expect(listComments).toHaveBeenCalledWith(9, 1, 'entry');
+    expect(detail.comments.map((comment) => comment.id)).toEqual([1]);
+  });
+
+  it('keeps a new top-level comment visible past page one without duplicating it later', async () => {
+    const firstPage = Array.from({ length: 15 }, (_, index) => ({
+      id: index + 1,
+      body: `留言${index + 1}`,
+      created_at: `2026-09-01T00:${String(index).padStart(2, '0')}:00Z`,
+    }));
+    const newest = {
+      id: 16,
+      body: '留言16',
+      created_at: '2026-09-01T00:15:00Z',
+    };
+    createComment.mockResolvedValue(newest);
+    listComments.mockResolvedValue({ results: [newest], next: null });
+    const detail = context(Detail, {
+      targetId: 5,
+      targetType: 'recording',
+      comments: firstPage,
+      commentsPage: 1,
+      commentsNext: 'next-page',
+      form: { body: newest.body },
+      $refs: { commentForm: { validate: async () => true } },
+    });
+
+    await detail.sendTopLevel();
+
+    expect(detail.comments.map((comment) => comment.id)).toEqual([
+      ...firstPage.map((comment) => comment.id),
+      newest.id,
+    ]);
+    expect(detail.form.body).toBe('');
+    expect(listComments).not.toHaveBeenCalled();
+
+    await detail.loadComments(true);
+
+    expect(listComments).toHaveBeenCalledWith(5, 2, 'recording');
+    expect(detail.comments.filter((comment) => comment.id === newest.id)).toHaveLength(1);
   });
 });
 

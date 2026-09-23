@@ -294,6 +294,7 @@ export default {
     commentsNext: null,
     commentsLoading: false,
     commentsError: '',
+    localTopLevelComments: [],
     sendingTop: false,
     sendingReply: false,
     form: { body: '' },
@@ -341,7 +342,16 @@ export default {
       try {
         const response = await listComments(this.targetId, page, this.targetType);
         const rows = pageResults(response);
-        this.comments = page === 1 ? rows : [...this.comments, ...rows];
+        const localIds = new Set(
+          this.localTopLevelComments.map((comment) => String(comment.id)),
+        );
+        this.comments = this.mergeCommentRows(
+          this.localTopLevelComments,
+          page === 1 ? rows : [...this.comments, ...rows],
+        );
+        this.localTopLevelComments = this.comments.filter(
+          (comment) => localIds.has(String(comment.id)),
+        );
         this.commentsPage = page;
         this.commentsNext = response.next;
         return rows;
@@ -351,6 +361,19 @@ export default {
       } finally {
         this.commentsLoading = false;
       }
+    },
+    mergeCommentRows(...groups) {
+      const rows = new Map();
+      groups.flat().forEach((comment) => {
+        if (comment?.id === undefined || comment?.id === null) return;
+        const id = String(comment.id);
+        rows.set(id, comment);
+      });
+      return [...rows.values()].sort((left, right) => {
+        const timeDifference = Date.parse(left.created_at || '') - Date.parse(right.created_at || '');
+        if (Number.isFinite(timeDifference) && timeDifference !== 0) return timeDifference;
+        return Number(left.id) - Number(right.id);
+      });
     },
     async loadCommentsUntil(targetId) {
       const found = this.comments.find(
@@ -482,9 +505,13 @@ export default {
       if (await this.$refs.commentForm.validate() !== true) return;
       this.sendingTop = true;
       try {
-        await this.submitComment(null);
+        const comment = await this.submitComment(null);
         this.form.body = '';
-        await this.loadComments();
+        this.localTopLevelComments = this.mergeCommentRows(
+          this.localTopLevelComments,
+          [comment],
+        );
+        this.comments = this.mergeCommentRows(this.comments, [comment]);
         notify({ title: '留言已发送' });
       } catch (error) {
         notify({ title: error.message || '发送失败，文字已保留，可重试' });
@@ -527,7 +554,7 @@ export default {
         this.requestSignature = signature;
         this.requestId = commentRequestId();
       }
-      await createComment({
+      const comment = await createComment({
         [`${this.targetType}_id`]: this.targetId,
         parent_id: parentId,
         reply_to_id: replyToId,
@@ -536,6 +563,7 @@ export default {
       }, this.targetType);
       this.requestSignature = '';
       this.requestId = '';
+      return comment;
     },
     async toggleCommentLike(comment) {
       if (this.busy || !this.auth()) return;
@@ -557,6 +585,9 @@ export default {
       this.busy = true;
       try {
         await deleteComment(comment.id, this.targetType);
+        this.localTopLevelComments = this.localTopLevelComments.filter(
+          (row) => String(row.id) !== String(comment.id),
+        );
         await this.loadComments();
         if (this.sheet.parent && this.sheet.parent.id === comment.id) {
           this.closeReplies();
